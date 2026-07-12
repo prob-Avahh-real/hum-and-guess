@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>你哼我猜 · Hum & Guess</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a12;color:#d0d0e8;font-family:"PingFang SC","Microsoft YaHei",sans-serif;
+  overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
+#ui{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;z-index:10;pointer-events:none}
+#ui>*{pointer-events:auto}
+#top-bar{display:flex;justify-content:space-between;width:100%;padding:10px 14px}
+#score{font-size:22px;font-weight:900;color:#80a0e0}#round{font-size:13px;color:#6070a0;margin-top:2px}
+#title-area{text-align:center}#title-name{font-size:19px;font-weight:700;color:#90b0f0;letter-spacing:1px}
+#mode-label{font-size:11px;color:#506090}
+#main-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;padding:0 16px}
+#pitch-display{font-size:clamp(48px,15vw,96px);font-weight:900;margin-bottom:8px;transition:color .2s}
+#pitch-note{font-size:18px;color:#6070a0;margin-bottom:4px}
+#status-text{font-size:14px;color:#8090b0;min-height:22px;text-align:center;margin-bottom:12px}
+#rec-btn{background:linear-gradient(135deg,#e04040,#c02020);border:none;color:#fff;font-size:18px;font-weight:700;
+  padding:14px 40px;border-radius:32px;cursor:pointer;box-shadow:0 4px 20px rgba(224,64,64,.3);transition:all .15s}
+#rec-btn:active{transform:scale(.95)}#rec-btn.recording{background:linear-gradient(135deg,#40e040,#20c020);box-shadow:0 4px 20px rgba(64,224,64,.3)}
+#rec-btn.disabled{background:#303040;box-shadow:none;cursor:not-allowed}
+#answers{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:400px;margin-top:12px}
+.ans-btn{background:#14142a;border:2px solid #2a2a4a;border-radius:12px;padding:10px 16px;color:#a0b0e0;
+  font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;min-width:80px;text-align:center}
+.ans-btn:active{background:#1a1a3a;border-color:#6080e0;transform:scale(.96)}
+.ans-btn.correct{background:#1a3a1a;border-color:#40c040;color:#80e080}
+.ans-btn.wrong{background:#3a1a1a;border-color:#c04040;color:#e08080}
+#bottom-bar{display:flex;gap:10px;padding:12px 14px;width:100%;justify-content:center}
+.mode-btn{background:#14142a;border:2px solid #2a2a4a;border-radius:10px;padding:8px 14px;color:#8090c0;
+  font-size:12px;font-weight:600;cursor:pointer}.mode-btn.active{border-color:#6080e0;color:#a0c0ff}
+#result-overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+  justify-content:center;z-index:20;background:rgba(5,5,15,.95)}
+#result-overlay.show{display:flex}
+#result-overlay h2{font-size:36px;font-weight:900;color:#80a0e0;margin-bottom:8px}
+#result-overlay .big-emoji{font-size:64px;margin:8px 0}
+#result-stats{display:flex;gap:24px;margin:12px 0}.rs{text-align:center}.rsv{font-size:24px;font-weight:900;color:#90b0f0}.rsl{font-size:10px;color:#506090}
+#result-overlay button{background:linear-gradient(135deg,#4060c0,#2040a0);border:none;color:#fff;
+  font-size:16px;font-weight:700;padding:10px 32px;border-radius:24px;cursor:pointer;margin-top:8px}
+#mic-perm{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;z-index:30;background:rgba(5,5,15,.98);color:#8090b0;font-size:16px}
+#mic-perm button{background:linear-gradient(135deg,#4060c0,#2040a0);border:none;color:#fff;
+  font-size:18px;font-weight:700;padding:12px 36px;border-radius:28px;cursor:pointer;margin-top:16px}
+@media(max-width:400px) and (max-height:320px),(max-width:320px) and (max-height:400px){
+  html{font-size:12px}#pitch-display{font-size:36px}#rec-btn{font-size:14px;padding:10px 28px}
+  .ans-btn{font-size:11px;padding:6px 10px;min-width:60px}#score{font-size:16px}#title-name{font-size:14px}
+}
+/* ===== WATCH MODE (narrow screen) ===== */
+@media(max-width:280px),(max-height:300px){
+  html{font-size:10px}#pitch-display{font-size:28px}#pitch-note{font-size:12px}
+  #rec-btn{font-size:12px;padding:8px 20px}#score{font-size:13px}#title-name{font-size:11px}
+  .ans-btn{font-size:10px;padding:4px 8px;min-width:50px}#status-text{font-size:10px}
+  #top-bar{padding:4px 6px}#main-area{padding:0 6px}#bottom-bar{padding:6px;gap:4px}
+  .mode-btn{font-size:10px;padding:5px 8px}
+}
+</style>
+</head>
+<body>
+<div id="mic-perm"><div>🎤</div><div style="margin-top:8px">需要麦克风权限来听你哼唱</div><button onclick="reqMic()">允许麦克风</button></div>
+<div id="ui" style="display:none">
+  <div id="top-bar"><div><div id="score">0</div><div id="round">第1轮</div></div><div id="title-area"><div id="title-name">你哼我猜</div><div id="mode-label"></div></div><div style="width:80px"></div></div>
+  <div id="main-area">
+    <div id="pitch-note">--</div>
+    <div id="pitch-display">🎵</div>
+    <div id="status-text">按下按钮开始哼唱</div>
+    <button id="rec-btn" onclick="toggleRec()">🎤 开始哼唱</button>
+    <div id="answers"></div>
+  </div>
+  <div id="bottom-bar"><button class="mode-btn active" onclick="setMode('challenge')">🎯 挑战模式</button><button class="mode-btn" onclick="setMode('free')">🎵 自由模式</button><button class="mode-btn" onclick="setMode('duel')">⚔️ 对决模式</button></div>
+</div>
+<canvas id="game"></canvas>
+<div id="result-overlay"><div class="big-emoji" id="re"></div><h2 id="rt"></h2><div id="result-stats"></div><button onclick="newRound()">再来一轮</button></div>
+
+<script>
+// ==================== PITCH DETECTION ====================
+let audioCtx,analyser,micStream,pitchBuf=[],isRec=false,detectId=null;
+async function reqMic(){try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+  const src=audioCtx.createMediaStreamSource(micStream);analyser=audioCtx.createAnalyser();
+  analyser.fftSize=2048;analyser.smoothingTimeConstant=.3;src.connect(analyser);
+  document.getElementById("mic-perm").style.display="none";document.getElementById("ui").style.display="flex";
+  initGame()}catch(e){document.getElementById("mic-perm").innerHTML='<div>❌</div><div style="margin-top:8px">麦克风不可用</div><button onclick="reqMic()">重试</button>'}}
+
+function detectPitch(){const buf=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(buf);
+  let bestOff=-1,bestCorr=-1;for(let o=20;o<buf.length/2;o++){let c=0;for(let i=0;i<buf.length-o;i++)c+=buf[i]*buf[i+o];if(c>bestCorr){bestCorr=c;bestOff=o}}
+  if(bestCorr<.01||bestOff<20)return 0;return audioCtx.sampleRate/bestOff}
+
+function getNoteName(freq){if(freq<50)return"--";const n=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const sn=Math.round(12*Math.log2(freq/440))+69;const oct=Math.floor(sn/12)-1;return n[((sn%12)+12)%12]+(oct>=0?oct:"")}
+
+function getNoteNumber(freq){if(freq<50)return-1;return Math.round(12*Math.log2(freq/440))+69}
+
+// ==================== MELODY RECORDING ====================
+let melody=[],lastPitch=-1,pitchStable=0;const MIN_STABLE=4;
+function processPitch(){if(!isRec)return;const freq=detectPitch();const nn=getNoteNumber(freq);
+  const pd=document.getElementById("pitch-display");const pn=document.getElementById("pitch-note");
+  if(freq>50){pd.textContent=getNoteName(freq).replace(/\d/g,"");pn.textContent=getNoteName(freq);
+    pd.style.color="#80c0ff";if(nn===lastPitch){pitchStable++;if(pitchStable===MIN_STABLE)melody.push(nn)}
+    else{lastPitch=nn;pitchStable=0}}else{pd.textContent="🎵";pn.textContent="--";pd.style.color="#404060";lastPitch=-1;pitchStable=0}
+  drawPitch(freq)}
+
+// ==================== SONG LIBRARY ====================
+const SONGS=[
+  {title:"小星星",notes:[60,60,67,67,69,69,67,65,65,64,64,62,62,60]},
+  {title:"生日快乐",notes:[60,60,62,60,65,64,60,60,62,60,67,65]},
+  {title:"两只老虎",notes:[60,62,64,60,60,62,64,60,64,65,67,64,65,67]},
+  {title:"茉莉花",notes:[64,65,67,64,65,67,67,69,67,65,64,62,60,62,64]},
+  {title:"送别",notes:[67,69,67,65,64,67,64,62,60,62,64,65,67,64,62,60]},
+  {title:"让我们荡起双桨",notes:[64,65,67,67,64,65,67,67,69,67,65,64,62,60,62,64]},
+  {title:"新年好",notes:[62,64,62,60,62,64,65,64,62,60]},
+  {title:"鲁冰花",notes:[67,67,65,64,62,67,65,64,62,60,60,62,64,65,67]},
+  {title:"康定情歌",notes:[64,62,60,62,64,65,67,64,62,60,62,64]},
+  {title:"大海啊故乡",notes:[60,62,64,65,67,65,64,62,60,62,64,65,64,62,60]},
+  {title:"同桌的你",notes:[67,65,64,62,64,65,67,64,62,60,62,64,62,60]},
+  {title:"童年",notes:[64,65,67,64,65,67,69,67,65,64,62,64,65,64,62,60]},
+  {title:"月亮代表我的心",notes:[64,62,60,62,64,65,67,64,65,64,62,60]},
+  {title:"甜蜜蜜",notes:[64,62,64,65,67,65,64,62,60,62,64,62,60]},
+  {title:"外婆的澎湖湾",notes:[60,62,64,65,64,62,60,62,64,65,67,65,64,62,64]},
+  {title:"龙的传人",notes:[64,65,67,67,65,64,62,64,65,64,62,60]},
+  {title:"明天会更好",notes:[67,65,64,62,60,62,64,65,67,65,64,62,60]},
+  {title:"橄榄树",notes:[60,62,64,65,67,67,65,64,62,64,65,64,62,60]},
+  {title:"童话",notes:[67,64,65,67,69,67,65,64,62,64,65,64,62,60]},
+  {title:"隐形的翅膀",notes:[64,65,67,64,62,64,65,67,64,65,67,69,67,65]},
+  {title:"朋友",notes:[62,64,65,67,64,62,60,62,64,62,60]},
+  {title:"大约在冬季",notes:[64,62,60,62,64,65,67,65,64,62,60]},
+  {title:"红豆",notes:[67,65,64,62,60,62,64,65,64,62,60,62,64]},
+  {title:"小城故事",notes:[60,62,64,65,67,65,64,62,60,62,64,62,60]},
+  {title:"但愿人长久",notes:[64,67,64,65,67,69,67,65,64,67,65,64,62,60]},
+  {title:"一无所有",notes:[64,62,64,62,60,62,64,65,64,62,60]},
+  {title:"花心",notes:[65,67,65,64,62,64,65,67,65,64,62,60]},
+  {title:"心太软",notes:[60,62,64,62,60,62,64,65,64,62,60,62,64]},
+  {title:"吻别",notes:[64,62,64,65,64,62,60,62,64,65,67,65,64]},
+  {title:"海阔天空",notes:[64,65,67,69,67,65,64,62,64,65,67,64,62,60]},
+];
+
+// DTW similarity
+function dtwDist(a,b){const m=a.length,n=b.length;const d=Array.from({length:m+1},()=>Array(n+1).fill(Infinity));d[0][0]=0;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){const cost=Math.abs(a[i-1]-b[j-1]);d[i][j]=cost+Math.min(d[i-1][j],d[i][j-1],d[i-1][j-1])}return d[m][n]/Math.max(m,n)}
+
+function guessSong(mel){if(mel.length<5)return null;let best=null,bd=Infinity;
+  for(const s of SONGS){const d=dtwDist(mel,s.notes);if(d<bd){bd=d;best=s}}return bd<3?best:null}
+
+// ==================== GAME STATE ====================
+let mode="challenge",score=0,round=1,target=null,correctCount=0,totalRounds=0;
+function initGame(){setMode("challenge");newRound()}
+function setMode(m){mode=m;document.querySelectorAll(".mode-btn").forEach(b=>b.classList.remove("active"));
+  event.target.classList.add("active");document.getElementById("mode-label").textContent=
+  m==="challenge"?"目标歌曲已选好，哼出来让大家猜！":m==="free"?"自由哼唱，看看匹配到了哪首歌":"两人轮流哼唱，看谁先猜中！";newRound()}
+
+function newRound(){stopRec();melody=[];lastPitch=-1;pitchStable=0;
+  if(mode==="challenge"){target=SONGS[Math.floor(Math.random()*SONGS.length)];
+    document.getElementById("title-name").textContent="第"+round+"轮 · 挑战模式";
+    document.getElementById("status-text").textContent="看谱哼唱：让朋友来猜这首歌！"
+    document.getElementById("answers").innerHTML="";showAnswerOptions(4)}
+  else if(mode==="free"){target=null;document.getElementById("title-name").textContent="自由模式";
+    document.getElementById("status-text").textContent="随意哼唱，AI会尝试识别";
+    document.getElementById("answers").innerHTML=""}
+  else{target=SONGS[Math.floor(Math.random()*SONGS.length)];
+    document.getElementById("title-name").textContent="第"+round+"轮 · 对决模式";
+    document.getElementById("status-text").textContent="两人轮流哼，先猜中得分！"
+    document.getElementById("answers").innerHTML="";showAnswerOptions(3)}
+  document.getElementById("pitch-display").textContent="🎵";document.getElementById("pitch-note").textContent="--";
+  document.getElementById("rec-btn").textContent="🎤 开始哼唱";document.getElementById("rec-btn").classList.remove("recording");
+  ctx.clearRect(0,0,canvas.width,canvas.height);drawGrid()}
+
+function showAnswerOptions(n){const opts=[target];while(opts.length<n){const s=SONGS[Math.floor(Math.random()*SONGS.length)];if(!opts.includes(s))opts.push(s)}
+  opts.sort(()=>Math.random()-.5);const div=document.getElementById("answers");div.innerHTML="";
+  opts.forEach(s=>{const b=document.createElement("button");b.className="ans-btn";b.textContent=s.title;
+    b.onclick=()=>{if(s===target){b.classList.add("correct");score+=10;correctCount++;
+    document.getElementById("score").textContent=score;document.getElementById("status-text").textContent="✅ 正确！就是"+target.title+"！";
+    setTimeout(()=>{round++;document.getElementById("round").textContent="第"+round+"轮";newRound()},1500)}
+    else{b.classList.add("wrong");document.getElementById("status-text").textContent="❌ 再猜一次！";setTimeout(()=>b.classList.remove("wrong"),800)}};div.appendChild(b)})}
+
+function toggleRec(){if(!audioCtx)return;isRec=!isRec;const btn=document.getElementById("rec-btn");
+  if(isRec){melody=[];lastPitch=-1;pitchStable=0;btn.textContent="⏹ 停止哼唱";btn.classList.add("recording");
+    document.getElementById("status-text").textContent="🎤 正在听你哼唱...";detectId=setInterval(processPitch,80)}
+  else{stopRec();btn.textContent="🎤 开始哼唱";btn.classList.remove("recording");
+    document.getElementById("status-text").textContent="分析中...";
+    if(melody.length>=5){if(mode==="free"){const g=guessSong(melody);
+      if(g){document.getElementById("title-name").textContent=g.title;
+      document.getElementById("status-text").textContent="🎯 识别结果: "+g.title;
+      document.getElementById("answers").innerHTML=`<div class="ans-btn correct">${g.title}</div>`}
+      else{document.getElementById("status-text").textContent="没有匹配到歌曲，再试一次？"}}
+    else{if(target){const d=dtwDist(melody,target.notes);
+      const emoji=d<2?"🎉":d<5?"👍":"🤔";
+      document.getElementById("status-text").textContent=emoji+" 相似度: "+Math.round((1-Math.min(d/10,1))*100)+"%";}}}
+    else{document.getElementById("status-text").textContent="哼得太短了，多唱几个音吧！"}}}
+
+function stopRec(){isRec=false;if(detectId){clearInterval(detectId);detectId=null}}
+
+// ==================== GLASSES VOICE INPUT ====================
+let voiceRecog=null,glassesMode=false;
+function detGl(){const w=Math.min(window.innerWidth,screen.width||9999),h=Math.min(window.innerHeight,screen.height||9999);
+ glassesMode=(w<=420&&h<=340)||(w<=340&&h<=420);if(glassesMode)startVI();return glassesMode}
+function startVI(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;
+ try{voiceRecog=new SR();voiceRecog.lang="zh-CN";voiceRecog.continuous=true;voiceRecog.interimResults=false;
+ voiceRecog.onresult=e=>{const t=e.results[e.results.length-1][0].transcript.trim();
+  if(/开始哼唱|哼唱|开始|唱|go|start/i.test(t)){if(!isRec)toggleRec()}
+  else if(/停止|停|stop|结束/i.test(t)){if(isRec)toggleRec()}};
+ voiceRecog.onerror=()=>{};voiceRecog.onend=()=>{if(glassesMode)voiceRecog.start()};voiceRecog.start()}catch(e){}}
+function stopVI(){if(voiceRecog){try{voiceRecog.stop()}catch(e){};voiceRecog=null}}
+
+// ==================== SMART RING INPUT ====================
+let ringActive=false,ringBeta=0,ringGamma=0,ringFc=0;
+const RTH=8,RTILT=5,RSHAKE=20;
+function initRing(){if(typeof DeviceOrientationEvent==='undefined')return;
+ if(typeof DeviceOrientationEvent.requestPermission==='function'){document.addEventListener('click',function rp(){DeviceOrientationEvent.requestPermission().then(s=>{if(s==='granted')startRing()}).catch(()=>{})},{once:true})}
+ else startRing()}
+function startRing(){ringActive=true;window.addEventListener('deviceorientation',onRing)}
+function onRing(e){if(!ringActive)return;ringFc++;if(ringFc%RTH!==0)return;
+ const b=e.beta||0,g=e.gamma||0,db=b-ringBeta,dg=g-ringGamma;ringBeta=b;ringGamma=g;
+ if(Math.abs(db)>RSHAKE||Math.abs(dg)>RSHAKE){toggleRec();return}
+ if(Math.abs(db)>RTILT){toggleRec()}}
+
+// ==================== SMART CANE INPUT ====================
+let caneActive=false,caneFc=0;
+const CTH=6,CTAP=8;
+function initCane(){if(typeof DeviceMotionEvent==='undefined')return;
+ if(typeof DeviceMotionEvent.requestPermission==='function'){document.addEventListener('click',function cp(){DeviceMotionEvent.requestPermission().then(s=>{if(s==='granted')startCane()}).catch(()=>{})},{once:true})}
+ else startCane()}
+function startCane(){caneActive=true;window.addEventListener('devicemotion',onCane)}
+function onCane(e){if(!caneActive)return;caneFc++;if(caneFc%CTH!==0)return;
+ const a=e.accelerationIncludingGravity||e.acceleration||{},ax=a.x||0,ay=a.y||0,az=a.z||0;
+ const dm=Math.sqrt(ax*ax+ay*ay+az*az);
+ if(dm>CTAP){toggleRec()}}
+
+// ==================== CANVAS ====================
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight}
+window.addEventListener("resize",resize);resize();
+function drawGrid(){const W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle="rgba(40,40,80,.3)";ctx.lineWidth=1;
+  for(let i=0;i<H;i+=40){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(W,i);ctx.stroke()}}
+let pitchHistory=[];
+function drawPitch(freq){const W=canvas.width,H=canvas.height;if(pitchHistory.length>W/2)pitchHistory.shift();
+  pitchHistory.push(freq);
+  ctx.clearRect(0,0,W,H);drawGrid();
+  // Draw waveform
+  ctx.beginPath();ctx.strokeStyle="#6080e0";ctx.lineWidth=2;
+  for(let i=1;i<pitchHistory.length;i++){const x=i*2,y1=H/2-(Math.min(pitchHistory[i-1],1000)-200)/800*H*.4,y2=H/2-(Math.min(pitchHistory[i],1000)-200)/800*H*.4;
+    if(pitchHistory[i-1]>50&&pitchHistory[i]>50){ctx.moveTo((i-1)*2,y1);ctx.lineTo(i*2,y2)}}
+  ctx.stroke();
+  // Recent melody notes
+  if(melody.length>0){ctx.fillStyle="#80c0ff88";ctx.font="12px monospace";ctx.textAlign="left";
+    melody.slice(-20).forEach((n,i)=>{const nn=getNoteName(440*Math.pow(2,(n-69)/12)).replace(/\d/g,"");ctx.fillText(nn,10,30+i*16)})}}
+
+// Init
+detGl();initRing();initCane();
+canvas.addEventListener("click",()=>{if(!audioCtx)reqMic()});
+</script>
+</body>
+</html>

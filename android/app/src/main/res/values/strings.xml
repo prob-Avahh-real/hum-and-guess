@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">你哼我猜</string>
+    <string name="title_activity_main">你哼我猜</string>
+    <string name="package_name">com.hum.guess</string>
+    <string name="custom_url_scheme">com.hum.guess</string>
+</resources>
